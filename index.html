@@ -31,6 +31,12 @@
     margin: 0 auto;
     padding: 0 0 60px 0;
     position: relative;
+    transition: filter 1.2s ease;
+  }
+  .wrap.locked {
+    filter: blur(20px) brightness(0.92) saturate(0.8);
+    pointer-events: none;
+    user-select: none;
   }
 
   .petal {
@@ -53,6 +59,69 @@
     width: 100%; height: 100%;
     pointer-events: none;
     z-index: 50;
+  }
+
+  /* ---- Lock overlay ---- */
+  #lockOverlay {
+    position: fixed;
+    inset: 0;
+    z-index: 200;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 24px;
+    background: rgba(247, 230, 216, 0.55);
+    backdrop-filter: blur(3px);
+    transition: opacity 1s ease;
+  }
+  #lockOverlay.hidden {
+    opacity: 0;
+    pointer-events: none;
+  }
+  .lock-icon {
+    font-size: 46px;
+    margin-bottom: 14px;
+    filter: drop-shadow(0 6px 14px rgba(120,70,80,0.25));
+  }
+  .lock-title {
+    font-family: 'Brush Script MT', 'Segoe Script', cursive;
+    font-size: 32px;
+    color: var(--rose);
+    margin-bottom: 6px;
+  }
+  .lock-sub {
+    font-size: 14px;
+    color: var(--text-soft);
+    letter-spacing: 0.5px;
+    margin-bottom: 22px;
+    max-width: 320px;
+  }
+  .countdown {
+    display: flex;
+    gap: 10px;
+  }
+  .cd-box {
+    background: #fff;
+    border-radius: 14px;
+    padding: 14px 12px;
+    min-width: 62px;
+    box-shadow: 0 10px 24px rgba(120,70,80,0.18);
+    border: 1px solid rgba(201,168,106,0.3);
+  }
+  .cd-num {
+    font-size: 26px;
+    font-weight: bold;
+    color: var(--rose);
+    font-variant-numeric: tabular-nums;
+  }
+  .cd-label {
+    font-size: 10px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: var(--text-soft);
+    margin-top: 4px;
   }
 
   .controls {
@@ -396,6 +465,9 @@
     .ekg-wrap { background: #2e2020; }
     .pulse-result { background: #2e2223; color: #f3e7e2; }
     .ctrl-btn { background: #2e2223; color: #f3e7e2; }
+    #lockOverlay { background: rgba(42,31,34,0.65); }
+    .cd-box { background: #2e2223; }
+    .cd-num { color: #f3c9cf; }
   }
   :root[data-theme="dark"] { --text: #f3e7e2; --text-soft: #d8bcbd; }
 </style>
@@ -404,13 +476,25 @@
 
 <canvas id="confettiCanvas"></canvas>
 
+<div id="lockOverlay">
+  <div class="lock-icon">🔒🎁</div>
+  <div class="lock-title">Ещё чуть-чуть...</div>
+  <div class="lock-sub">Открытка откроется 18 сентября в 14:40 по Киеву</div>
+  <div class="countdown">
+    <div class="cd-box"><div class="cd-num" id="cdDays">00</div><div class="cd-label">дн</div></div>
+    <div class="cd-box"><div class="cd-num" id="cdHours">00</div><div class="cd-label">час</div></div>
+    <div class="cd-box"><div class="cd-num" id="cdMinutes">00</div><div class="cd-label">мин</div></div>
+    <div class="cd-box"><div class="cd-num" id="cdSeconds">00</div><div class="cd-label">сек</div></div>
+  </div>
+</div>
+
 <div class="petal" style="left:5%; animation-duration:14s; animation-delay:0s;">🌸</div>
 <div class="petal" style="left:25%; animation-duration:18s; animation-delay:3s;">💐</div>
 <div class="petal" style="left:50%; animation-duration:16s; animation-delay:6s;">🌷</div>
 <div class="petal" style="left:70%; animation-duration:20s; animation-delay:2s;">🌸</div>
 <div class="petal" style="left:88%; animation-duration:15s; animation-delay:8s;">🎈</div>
 
-<div class="wrap">
+<div class="wrap locked" id="cardWrap">
   <div class="controls">
     <button class="ctrl-btn" id="musicBtn">🎵 Включить мелодию</button>
     <button class="ctrl-btn" id="confettiBtn">🎊 Салют</button>
@@ -488,6 +572,44 @@
 
 <script>
 (function() {
+  // ---- Reveal gate: 18 Sept 2026, 10:05 Kyiv time (UTC+3) ----
+  var targetTime = Date.UTC(2026, 8, 18, 7, 05, 0); // 14:40 Kyiv = 11:40 UTC
+  var overlay = document.getElementById('lockOverlay');
+  var wrap = document.getElementById('cardWrap');
+  var revealed = false;
+
+  function pad(n) { return String(n).padStart(2, '0'); }
+
+  function updateCountdown() {
+    var diff = targetTime - Date.now();
+    if (diff <= 0) {
+      reveal();
+      return;
+    }
+    var d = Math.floor(diff / 86400000);
+    var h = Math.floor((diff % 86400000) / 3600000);
+    var m = Math.floor((diff % 3600000) / 60000);
+    var s = Math.floor((diff % 60000) / 1000);
+    document.getElementById('cdDays').textContent = pad(d);
+    document.getElementById('cdHours').textContent = pad(h);
+    document.getElementById('cdMinutes').textContent = pad(m);
+    document.getElementById('cdSeconds').textContent = pad(s);
+  }
+
+  function reveal() {
+    if (revealed) return;
+    revealed = true;
+    clearInterval(timerId);
+    overlay.classList.add('hidden');
+    wrap.classList.remove('locked');
+    setTimeout(function() { overlay.style.display = 'none'; }, 1100);
+    spawnBurst(90);
+    startAudio();
+  }
+
+  var timerId = setInterval(updateCountdown, 1000);
+  updateCountdown();
+
   // ---- Pulse check ----
   var btn = document.getElementById('pulseBtn');
   var path = document.getElementById('ekgPath');
@@ -570,8 +692,6 @@
   document.getElementById('confettiBtn').addEventListener('click', function() {
     spawnBurst(90);
   });
-  // gentle burst on load
-  setTimeout(function() { spawnBurst(70); }, 400);
 
   // ---- Melody (Web Audio, synthesized, no external files) — loops continuously ----
   var audioCtx = null;
@@ -631,7 +751,7 @@
   }
 
   function startAudio() {
-    if (started) return;
+    if (started || !revealed) return;
     ensureContext();
     audioCtx.resume().then(function() {
       started = true;
@@ -639,15 +759,11 @@
     }).catch(function() {});
   }
 
-  // Try to start as soon as the page opens
-  startAudio();
-
   // Browsers may block autoplay with sound until the visitor interacts —
-  // this catches the first tap/click anywhere on the page as a fallback.
+  // this catches the first tap/click anywhere on the page as a fallback,
+  // but only takes effect once the card is actually revealed.
   function firstInteraction() {
     startAudio();
-    document.removeEventListener('click', firstInteraction);
-    document.removeEventListener('touchstart', firstInteraction);
   }
   document.addEventListener('click', firstInteraction);
   document.addEventListener('touchstart', firstInteraction);
